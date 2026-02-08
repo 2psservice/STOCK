@@ -1932,6 +1932,73 @@
             </div>
         </div>
     </div>
+
+    <!-- NEW: Face Scan Modal (Mobile-Responsive with AI) -->
+    <div id="faceScanModal"
+        class="fixed inset-0 bg-slate-900/95 backdrop-blur-md hidden z-[110] flex items-center justify-center">
+        <div
+            class="bg-white rounded-3xl w-full h-full md:h-auto md:max-w-2xl md:rounded-3xl shadow-2xl animate-slide-in flex flex-col overflow-hidden">
+            <!-- Header -->
+            <div
+                class="flex justify-between items-center p-4 md:p-6 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg">
+                        <i class="fas fa-camera"></i>
+                    </div>
+                    <div>
+                        <h3 id="faceScanTitle" class="font-black text-lg md:text-xl text-slate-800">
+                            ยืนยันตัวตนด้วยใบหน้า</h3>
+                        <p class="text-xs text-slate-500 font-bold">✨ ขับเคลื่อนด้วย AI</p>
+                    </div>
+                </div>
+                <button onclick="closeFaceScanModal()"
+                    class="text-slate-400 hover:text-slate-600 transition-colors w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100">
+                    <i class="fas fa-times text-2xl"></i>
+                </button>
+            </div>
+
+            <!-- Mode Indicator -->
+            <div id="faceModeIndicator" class="p-4 md:p-6"></div>
+
+            <!-- Video Container -->
+            <div class="relative bg-slate-900 flex-1 min-h-[300px] max-h-[60vh] md:max-h-[400px]">
+                <video id="faceVideo" autoplay playsinline class="w-full h-full object-cover"></video>
+                <canvas id="faceCanvas" class="absolute top-0 left-0 w-full h-full"></canvas>
+
+                <!-- Liveness Prompt -->
+                <div id="livenessPrompt" class="absolute bottom-4 left-1/2 transform -translate-x-1/2 hidden">
+                    <div
+                        class="bg-white/95 backdrop-blur-sm px-6 py-3 rounded-full font-bold text-slate-800 shadow-xl border-2 border-blue-500 animate-pulse">
+                        <i class="fas fa-eye text-blue-600 mr-2"></i>
+                        <span id="livenessText">กรุณากระพริบตา</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="p-4 md:p-6 bg-slate-50">
+                <div class="flex justify-between text-sm font-bold text-slate-600 mb-2">
+                    <span id="statusLabel">กำลังตรวจจับใบหน้า...</span>
+                    <span id="progressPercent">0%</span>
+                </div>
+                <div class="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
+                    <div id="faceProgress"
+                        class="bg-gradient-to-r from-blue-500 to-blue-600 h-full rounded-full transition-all duration-300"
+                        style="width: 0%"></div>
+                </div>
+
+                <!-- Status Message -->
+                <div id="faceStatusMessage" class="mt-4"></div>
+
+                <!-- Retry Button -->
+                <button id="retryFaceButton" onclick="retryFaceScan()"
+                    class="hidden w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white py-3 md:py-4 rounded-xl md:rounded-2xl font-black text-base md:text-lg shadow-lg hover:shadow-xl transition-all mt-4">
+                    <i class="fas fa-redo mr-2"></i> ลองใหม่อีกครั้ง
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
