@@ -6100,34 +6100,47 @@
             }
         }
 
-        // Open Face Scan Modal
-        async function checkLocationAndOpenFaceModal(type) {
-            currentCheckType = type;
+        // NEW: Missing function - Check Location and Open Face Modal
+        async function checkLocationAndOpenFaceModal(checkType) {
+            console.log('=== checkLocationAndOpenFaceModal START ===');
+            console.log('Check type:', checkType);
 
-            // GPS Check (existing logic should still work)
-            // For now, let's assume GPS is OK and proceed
+            currentCheckType = checkType;
 
-            // Load models if not loaded
+            // GPS is already checked automatically on page load by autoCheckEmployeeLocation()
+            // So we can skip the GPS check here and go directly to face scan
+            console.log('Skipping GPS check (already verified on page load)');
+
+            // Load face models first
             const modelsLoaded = await loadFaceModels();
             if (!modelsLoaded) {
                 showToast('❌ ไม่สามารถเริ่มระบบสแกนใบหน้าได้');
                 return;
             }
 
-            // Check if employee has registered face
+            // Get employee and check if face is registered
             const employee = appData.employees.find(e => e.id === appData.currentUserId);
-            if (!employee) return;
+            if (!employee) {
+                showToast('❌ ไม่พบข้อมูลพนักงาน');
+                return;
+            }
 
             if (employee.faceRegistered) {
-                // Verification mode
+                console.log('Opening face VERIFICATION modal');
                 currentFaceMode = 'verify';
-                openFaceScanModal('verify');
+                await openFaceScanModal('verify');
             } else {
-                // Registration mode
+                console.log('Opening face REGISTRATION modal');
                 currentFaceMode = 'register';
-                openFaceScanModal('register');
+                await openFaceScanModal('register');
             }
+
+            console.log('=== checkLocationAndOpenFaceModal END ===');
         }
+
+        // Make it available globally
+        window.checkLocationAndOpenFaceModal = checkLocationAndOpenFaceModal;
+
 
         async function openFaceScanModal(mode) {
             const modal = document.getElementById('faceScanModal');
@@ -6470,11 +6483,111 @@
             document.getElementById('livenessPrompt').classList.add('hidden');
         }
 
-        function proceedWithCheckIn() {
+        async function proceedWithCheckIn() {
             // After face scan success, proceed with check-in/out
-            // You can add actual check-in/out logic here
-            // For now, just show success message
-            showToast(`✅ ${currentCheckType === 'in' ? 'บันทึกเวลาเข้างาน' : 'บันทึกเวลาออกงาน'}สำเร็จ`);
+            console.log('proceedWithCheckIn called, type:', currentCheckType);
+
+            const employee = appData.employees.find(e => e.id === appData.currentUserId);
+            if (!employee) {
+                showToast('❌ ไม่พบข้อมูลพนักงาน');
+                return;
+            }
+
+            const today = new Date().toISOString().split('T')[0];
+            const now = new Date();
+            const time = now.toTimeString().split(' ')[0];
+
+            // Get current location (GPS already checked earlier)
+            try {
+                const position = await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(resolve, reject, {
+                        enableHighAccuracy: true,
+                        timeout: 5000,
+                        maximumAge: 60000 // Allow cached location up to 1 minute
+                    });
+                });
+
+                const lat = position.coords.latitude.toFixed(6);
+                const lng = position.coords.longitude.toFixed(6);
+
+                if (currentCheckType === 'in') {
+                    // Check-in
+                    let record = appData.attendance.find(r => r.employeeId === employee.id && r.date === today);
+                    if (!record) {
+                        record = {
+                            employeeId: employee.id,
+                            date: today,
+                            checkIn: time,
+                            checkInLocation: `${lat},${lng}`,
+                            status: 'มาทำงาน'
+                        };
+                        appData.attendance.push(record);
+                    } else {
+                        record.checkIn = time;
+                        record.checkInLocation = `${lat},${lng}`;
+                        record.status = 'มาทำงาน';
+                    }
+
+                    await saveData();
+                    showToast(`✅ บันทึกเวลาเข้างานสำเร็จ\n${time}`);
+
+                } else if (currentCheckType === 'out') {
+                    // Check-out
+                    let record = appData.attendance.find(r => r.employeeId === employee.id && r.date === today);
+                    if (!record) {
+                        showToast('⚠️ กรุณาบันทึกเวลาเข้างานก่อน');
+                        return;
+                    }
+
+                    record.checkOut = time;
+                    record.checkOutLocation = `${lat},${lng}`;
+
+                    await saveData();
+                    showToast(`✅ บันทึกเวลาออกงานสำเร็จ\n${time}`);
+                }
+
+                // Refresh employee view
+                setTimeout(() => {
+                    if (appData.currentRole === 'employee') {
+                        renderEmployeeView();
+                    }
+                }, 1000);
+
+            } catch (error) {
+                console.error('Error getting location for check-in:', error);
+                // Still proceed with check-in even if GPS fails at this point
+                // (since it was already checked earlier)
+                if (currentCheckType === 'in') {
+                    let record = appData.attendance.find(r => r.employeeId === employee.id && r.date === today);
+                    if (!record) {
+                        record = {
+                            employeeId: employee.id,
+                            date: today,
+                            checkIn: time,
+                            status: 'มาทำงาน'
+                        };
+                        appData.attendance.push(record);
+                    } else {
+                        record.checkIn = time;
+                        record.status = 'มาทำงาน';
+                    }
+                    await saveData();
+                    showToast(`✅ บันทึกเวลาเข้างานสำเร็จ\n${time}`);
+                } else {
+                    let record = appData.attendance.find(r => r.employeeId === employee.id && r.date === today);
+                    if (record) {
+                        record.checkOut = time;
+                        await saveData();
+                        showToast(`✅ บันทึกเวลาออกงานสำเร็จ\n${time}`);
+                    }
+                }
+
+                setTimeout(() => {
+                    if (appData.currentRole === 'employee') {
+                        renderEmployeeView();
+                    }
+                }, 1000);
+            }
         }
 
         // ========================================================================
