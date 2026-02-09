@@ -349,48 +349,29 @@
                         </div>
 
                         <!-- Check-in/out Buttons -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto">
-                            <!-- Check-in Button -->
-                            <div id="checkin-container">
-                                <button onclick="checkLocationAndOpenFaceModal('in')"
-                                    class="w-full bg-white hover:bg-green-50 rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105 group">
+                        <div class="grid grid-cols-1 gap-4 max-w-3xl mx-auto">
+                            <!-- Unified Face Scan Button -->
+                            <div id="facescan-container">
+                                <button onclick="checkLocationAndOpenFaceModal()"
+                                    class="w-full bg-white hover:bg-blue-50 rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105 group">
                                     <div class="flex items-center gap-4">
                                         <div
-                                            class="w-16 h-16 bg-gradient-to-br from-green-400 to-emerald-500 rounded-2xl flex items-center justify-center text-white text-3xl shadow-lg group-hover:rotate-6 transition-transform">
-                                            <i class="fas fa-sign-in-alt"></i>
+                                            class="w-16 h-16 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-2xl flex items-center justify-center text-white text-3xl shadow-lg group-hover:rotate-6 transition-transform">
+                                            <i class="fas fa-camera"></i>
                                         </div>
                                         <div class="text-left flex-1">
-                                            <h3 class="text-2xl font-black text-slate-800">บันทึกเวลาเข้างาน</h3>
-                                            <p class="text-sm text-slate-500 font-bold">Face Recognition Check-in</p>
+                                            <h3 class="text-2xl font-black text-slate-800">สแกนหน้าเพื่อบันทึกเวลา</h3>
+                                            <p id="facescan-status" class="text-sm text-slate-500 font-bold">Face
+                                                Recognition Attendance</p>
                                         </div>
                                         <i
-                                            class="fas fa-chevron-right text-slate-300 group-hover:text-green-500 text-xl group-hover:translate-x-1 transition-all"></i>
-                                    </div>
-                                </button>
-                            </div>
-
-                            <!-- Check-out Button -->
-                            <div id="checkout-container">
-                                <button onclick="checkLocationAndOpenFaceModal('out')"
-                                    class="w-full bg-white hover:bg-red-50 rounded-2xl p-6 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105 group">
-                                    <div class="flex items-center gap-4">
-                                        <div
-                                            class="w-16 h-16 bg-gradient-to-br from-red-400 to-rose-500 rounded-2xl flex items-center justify-center text-white text-3xl shadow-lg group-hover:rotate-6 transition-transform">
-                                            <i class="fas fa-sign-out-alt"></i>
-                                        </div>
-                                        <div class="text-left flex-1">
-                                            <h3 class="text-2xl font-black text-slate-800">บันทึกเวลาออกงาน</h3>
-                                            <p id="checkout-work-duration" class="text-sm text-slate-500 font-bold">Face
-                                                Recognition Check-out</p>
-                                        </div>
-                                        <i
-                                            class="fas fa-chevron-right text-slate-300 group-hover:text-red-500 text-xl group-hover:translate-x-1 transition-all"></i>
+                                            class="fas fa-chevron-right text-slate-300 group-hover:text-blue-500 text-xl group-hover:translate-x-1 transition-all"></i>
                                     </div>
                                 </button>
                             </div>
 
                             <!-- Already Checked Container -->
-                            <div id="already-checked-container" class="hidden md:col-span-2">
+                            <div id="already-checked-container" class="hidden">
                                 <div class="bg-white/20 backdrop-blur-sm rounded-2xl p-6 border-2 border-white/30">
                                     <div class="flex items-center justify-center gap-3 text-white">
                                         <i class="fas fa-check-circle text-3xl"></i>
@@ -2003,6 +1984,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+        import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
         // Updated Firebase Configuration for hrv2-5a910
         const firebaseConfig = {
@@ -2019,6 +2001,7 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getDatabase(app);
+        const storage = getStorage(app);
 
         const ADMIN_PIN = "admin";
 
@@ -2046,6 +2029,7 @@
                 { name: "มหาพร", startTime: "08:30" }
             ],
             employees: [],
+            attendance: [], // NEW: Track daily attendance
             history: [],
             leaveRules: {
                 1: { name: "ลาป่วย", deduction: 0.5, note: "ตามแพทย์สั่ง" },
@@ -2677,8 +2661,19 @@
                         timeStr = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')} น.`;
                     }
 
+                    // Check-out time (if exists)
+                    let checkOutTimeStr = "-";
+                    if (h.checkOutTime) {
+                        // checkOutTime is in format "HH:MM:SS"
+                        const timeParts = h.checkOutTime.split(':');
+                        if (timeParts.length >= 2) {
+                            checkOutTimeStr = `${timeParts[0]}:${timeParts[1]} น.`;
+                        }
+                    }
+
                     row.innerHTML = `<td class="px-6 py-4 text-xs">${h.date}</td>
                                      <td class="px-6 py-4 text-xs font-bold text-slate-600">${timeStr}</td>
+                                     <td class="px-6 py-4 text-xs font-bold text-slate-600">${checkOutTimeStr}</td>
                                      <td class="px-6 py-4 font-bold">${appData.leaveRules[h.type]?.name || 'พิเศษ'}</td>
                                      <td class="px-6 py-4 italic text-xs">"${h.reason}"</td>
                                      <td class="px-6 py-4 text-center">${otDisplay}</td>
@@ -2689,24 +2684,20 @@
             }
 
             // Check In Status for Today
-            const today = new Date().toISOString().slice(0, 10); // Simple date format
-            const hasChecked = appData.history.find(h => h.empId == emp.id && h.date === today && (h.type == 11 || h.type == 6 || h.type == 7));
+            const today = new Date().toISOString().slice(0, 10);
+            const hasChecked = appData.history.find(h => h.empId == emp.id && h.date === today && h.type === 11);
 
-            // Show/hide check-in and check-out buttons
-            const checkinContainer = document.getElementById('checkin-container');
-            const checkoutContainer = document.getElementById('checkout-container');
+            const facescanContainer = document.getElementById('facescan-container');
+            const facescanStatus = document.getElementById('facescan-status');
             const alreadyCheckedContainer = document.getElementById('already-checked-container');
             const alreadyChecked = document.getElementById('already-checked');
-
-            // Always show both check-in and check-out buttons
-            if (checkinContainer) checkinContainer.classList.remove('hidden');
-            if (checkoutContainer) checkoutContainer.classList.remove('hidden');
 
             if (hasChecked) {
                 // Has checked in already
                 // Check if already checked out
                 if (hasChecked.checkOutTime) {
-                    // Already checked out - show complete message in top section
+                    // Already checked out - show complete message
+                    if (facescanContainer) facescanContainer.classList.add('hidden');
                     if (alreadyCheckedContainer) alreadyCheckedContainer.classList.remove('hidden');
                     if (alreadyChecked) {
                         alreadyChecked.classList.remove('hidden');
@@ -2716,24 +2707,31 @@
                         }
                     }
                 } else {
-                    // Checked in but not checked out yet
+                    // Checked in but not checked out yet - update status text
+                    if (facescanContainer) facescanContainer.classList.remove('hidden');
                     if (alreadyCheckedContainer) alreadyCheckedContainer.classList.add('hidden');
                     if (alreadyChecked) alreadyChecked.classList.add('hidden');
 
-                    // Update checkout duration display
-                    const durationEl = document.getElementById('checkout-work-duration');
-                    if (durationEl && hasChecked.checkInTime) {
-                        const checkInTime = new Date(hasChecked.date + ' ' + hasChecked.checkInTime);
+                    // Update status to show that next scan will be check-out
+                    if (facescanStatus && hasChecked.checkInTime) {
+                        const checkInTime = hasChecked.checkInTime;
                         const now = new Date();
-                        const hours = Math.floor((now - checkInTime) / (1000 * 60 * 60));
-                        const minutes = Math.floor(((now - checkInTime) % (1000 * 60 * 60)) / (1000 * 60));
-                        durationEl.innerText = `ทำงานมาแล้ว ${hours} ชม. ${minutes} นาที`;
+                        const checkIn = new Date(hasChecked.date + ' ' + checkInTime);
+                        const hours = Math.floor((now - checkIn) / (1000 * 60 * 60));
+                        const minutes = Math.floor(((now - checkIn) % (1000 * 60 * 60)) / (1000 * 60));
+                        facescanStatus.innerHTML = `เข้างานแล้ว ${checkInTime} น. (ทำงานมา ${hours} ชม. ${minutes} นาที)`;
                     }
                 }
             } else {
-                // Haven't checked in yet
+                // Haven't checked in yet - show default message
+                if (facescanContainer) facescanContainer.classList.remove('hidden');
                 if (alreadyCheckedContainer) alreadyCheckedContainer.classList.add('hidden');
                 if (alreadyChecked) alreadyChecked.classList.add('hidden');
+
+                // Reset status text
+                if (facescanStatus) {
+                    facescanStatus.innerText = 'ยังไม่ได้เช็คชื่อวันนี้ - สแกนเพื่อบันทึกเวลาเข้างาน';
+                }
             }
 
             const actionContainer = document.getElementById('attendance-actions');
@@ -6167,12 +6165,35 @@
             }
         }
 
-        // NEW: Missing function - Check Location and Open Face Modal
-        async function checkLocationAndOpenFaceModal(checkType) {
+        // NEW: Missing function - Check Location and Open Face Modal with Auto-Detection
+        async function checkLocationAndOpenFaceModal() {
             console.log('=== checkLocationAndOpenFaceModal START ===');
-            console.log('Check type:', checkType);
 
-            currentCheckType = checkType;
+            // Get employee
+            const employee = appData.employees.find(e => e.id === appData.currentUserId);
+            if (!employee) {
+                showToast('❌ ไม่พบข้อมูลพนักงาน');
+                return;
+            }
+
+            // Auto-detect: Check if employee has checked in today
+            const today = new Date().toISOString().slice(0, 10);
+            const todayHistory = appData.history.find(h => h.empId === employee.id && h.date === today && h.type === 11);
+
+            // Determine check type automatically
+            if (!todayHistory) {
+                // No record for today = Check-in
+                currentCheckType = 'in';
+                console.log('Auto-detected: CHECK-IN (no record for today)');
+            } else if (!todayHistory.checkOutTime) {
+                // Has check-in but no check-out = Check-out
+                currentCheckType = 'out';
+                console.log('Auto-detected: CHECK-OUT (already checked in)');
+            } else {
+                // Already checked in and out today
+                showToast('⚠️ คุณได้เช็คชื่อเข้าและออกแล้ววันนี้');
+                return;
+            }
 
             // GPS is already checked automatically on page load by autoCheckEmployeeLocation()
             // So we can skip the GPS check here and go directly to face scan
@@ -6182,13 +6203,6 @@
             const modelsLoaded = await loadFaceModels();
             if (!modelsLoaded) {
                 showToast('❌ ไม่สามารถเริ่มระบบสแกนใบหน้าได้');
-                return;
-            }
-
-            // Get employee and check if face is registered
-            const employee = appData.employees.find(e => e.id === appData.currentUserId);
-            if (!employee) {
-                showToast('❌ ไม่พบข้อมูลพนักงาน');
                 return;
             }
 
@@ -6294,7 +6308,8 @@
             if (currentFaceMode === 'register') {
                 livenessSteps = ['blink', 'smile'];
             } else {
-                livenessSteps = ['blink'];
+                // NEW: Verify mode - no liveness check needed
+                livenessSteps = [];
             }
             currentLivenessStep = 0;
             faceDescriptors = [];
@@ -6340,6 +6355,7 @@
                 if (currentFaceMode === 'register') {
                     await handleRegistrationFlow(detections);
                 } else {
+                    // NEW: Fast verification - verify immediately
                     await handleVerificationFlow(detections);
                 }
             } else {
@@ -6387,21 +6403,9 @@
         }
 
         async function handleVerificationFlow(detections) {
-            const currentStep = livenessSteps[currentLivenessStep];
-
-            if (currentStep === 'blink') {
-                const blinkResult = await checkBlink(detections.landmarks);
-                if (blinkResult && !blinkDetected) {
-                    blinkDetected = true;
-                    currentLivenessStep++;
-                    updateProgress(50);
-
-                    // Proceed to verification
-                    await verifyFace(detections.descriptor);
-                } else if (!blinkResult) {
-                    showLivenessPrompt('blink');
-                }
-            }
+            // NEW: Fast verification - directly compare face without blink check
+            // Just verify immediately when face is detected
+            await verifyFace(detections.descriptor);
         }
 
         async function checkBlink(landmarks) {
@@ -6457,6 +6461,49 @@
             progressBar.style.width = percent + '%';
         }
 
+        // Capture current video frame as JPEG blob
+        async function captureFacePhoto() {
+            const video = document.getElementById('faceVideo');
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Convert canvas to blob
+            return new Promise((resolve) => {
+                canvas.toBlob((blob) => {
+                    resolve(blob);
+                }, 'image/jpeg', 0.9);
+            });
+        }
+
+        // Upload face photo to Firebase Storage
+        async function uploadFacePhoto(empId, photoBlob) {
+            try {
+                // Generate unique filename with timestamp
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const filename = `faces/${empId}_${timestamp}.jpg`;
+
+                // Create storage reference
+                const fileRef = storageRef(storage, filename);
+
+                // Upload blob
+                await uploadBytes(fileRef, photoBlob);
+
+                // Get download URL
+                const url = await getDownloadURL(fileRef);
+
+                console.log('Face photo uploaded successfully:', url);
+                return url;
+            } catch (error) {
+                console.error('Error uploading face photo:', error);
+                // Don't throw - we don't want to block registration if upload fails
+                return null;
+            }
+        }
+
         async function completeFaceRegistration() {
             stopFaceDetection();
             updateProgress(100);
@@ -6464,12 +6511,31 @@
             // Calculate average descriptor
             const avgDescriptor = averageDescriptors(faceDescriptors);
 
+            // Capture face photo
+            let facePhotoURL = null;
+            try {
+                const photoBlob = await captureFacePhoto();
+                if (photoBlob) {
+                    facePhotoURL = await uploadFacePhoto(appData.currentUserId, photoBlob);
+                }
+            } catch (error) {
+                console.error('Failed to capture/upload face photo:', error);
+                // Continue with registration even if photo fails
+            }
+
             // Save to employee data
             const employee = appData.employees.find(e => e.id === appData.currentUserId);
             if (employee) {
                 employee.faceDescriptor = Array.from(avgDescriptor);
                 employee.faceRegistered = true;
                 employee.faceRegisteredAt = new Date().toISOString();
+
+                // Save photo URL if upload was successful
+                if (facePhotoURL) {
+                    employee.facePhotoURL = facePhotoURL;
+                    employee.facePhotoTimestamp = new Date().toISOString();
+                    console.log('Face photo URL saved to employee record');
+                }
 
                 await saveData();
 
@@ -6578,6 +6644,36 @@
                 const lng = position.coords.longitude.toFixed(6);
 
                 if (currentCheckType === 'in') {
+                    // Calculate late detection
+                    const yard = appData.locations.find(l =>
+                        (typeof l === 'object' ? l.name : l) === employee.location
+                    );
+                    const startTime = yard ? (yard.startTime || "08:30") : "08:30";
+
+                    const [checkHour, checkMin] = time.split(':').map(Number);
+                    const [startHour, startMin] = startTime.split(':').map(Number);
+
+                    const checkMinutes = checkHour * 60 + checkMin;
+                    const startMinutes = startHour * 60 + startMin;
+                    const minutesLate = checkMinutes - startMinutes;
+
+                    let historyType = 11;
+                    let deduction = 0;
+                    let status = 'มาทำงาน';
+
+                    if (minutesLate > 30) {
+                        historyType = 7;
+                        deduction = 1.0;
+                        status = 'มาสาย > 30 นาที';
+                    } else if (minutesLate > 0) {
+                        historyType = 6;
+                        deduction = 0.5;
+                        status = 'มาสาย < 30 นาที';
+                    }
+
+                    // Deduct score from employee
+                    employee.score -= deduction;
+
                     // Check-in
                     let record = appData.attendance.find(r => r.employeeId === employee.id && r.date === today);
                     if (!record) {
@@ -6586,17 +6682,36 @@
                             date: today,
                             checkIn: time,
                             checkInLocation: `${lat},${lng}`,
-                            status: 'มาทำงาน'
+                            status: status
                         };
                         appData.attendance.push(record);
                     } else {
                         record.checkIn = time;
                         record.checkInLocation = `${lat},${lng}`;
-                        record.status = 'มาทำงาน';
+                        record.status = status;
+                    }
+
+                    // Add to calendar history with correct type
+                    const existingHistory = appData.history.find(h => h.empId === employee.id && h.date === today && h.type === historyType);
+                    if (!existingHistory) {
+                        appData.history.push({
+                            empId: employee.id,
+                            date: today,
+                            type: historyType,
+                            timestamp: now.toISOString(),
+                            status: 'Approved',
+                            deduction: deduction,
+                            reason: `บันทึกเวลาผ่าน Face Scan (${status})`
+                        });
                     }
 
                     await saveData();
-                    showToast(`✅ บันทึกเวลาเข้างานสำเร็จ\n${time}`);
+
+                    if (deduction > 0) {
+                        showToast(`⚠️ ${status}\nหักคะแนน ${deduction} คะแนน\nเวลา: ${time}`);
+                    } else {
+                        showToast(`✅ บันทึกเวลาเข้างานสำเร็จ\n${time}`);
+                    }
 
                 } else if (currentCheckType === 'out') {
                     // Check-out
@@ -6609,14 +6724,25 @@
                     record.checkOut = time;
                     record.checkOutLocation = `${lat},${lng}`;
 
+                    // Update history record with check-out time
+                    const historyRecord = appData.history.find(h => h.empId === employee.id && h.date === today && h.type === 11);
+                    if (historyRecord) {
+                        historyRecord.checkOutTime = time;
+                    }
+
                     await saveData();
                     showToast(`✅ บันทึกเวลาออกงานสำเร็จ\n${time}`);
                 }
 
-                // Refresh employee view
+                // Refresh all views to show updated attendance
                 setTimeout(() => {
                     if (appData.currentRole === 'employee') {
                         renderEmployeeView();
+                    } else if (appData.currentRole === 'admin') {
+                        // Trigger re-render of employee list to show checkmark and status
+                        window.location.reload();
+                    } else if (appData.currentRole === 'manager') {
+                        window.location.reload();
                     }
                 }, 1000);
 
@@ -6625,33 +6751,95 @@
                 // Still proceed with check-in even if GPS fails at this point
                 // (since it was already checked earlier)
                 if (currentCheckType === 'in') {
+                    // Calculate late detection (same logic as GPS success path)
+                    const yard = appData.locations.find(l =>
+                        (typeof l === 'object' ? l.name : l) === employee.location
+                    );
+                    const startTime = yard ? (yard.startTime || "08:30") : "08:30";
+
+                    const [checkHour, checkMin] = time.split(':').map(Number);
+                    const [startHour, startMin] = startTime.split(':').map(Number);
+
+                    const checkMinutes = checkHour * 60 + checkMin;
+                    const startMinutes = startHour * 60 + startMin;
+                    const minutesLate = checkMinutes - startMinutes;
+
+                    let historyType = 11;
+                    let deduction = 0;
+                    let status = 'มาทำงาน';
+
+                    if (minutesLate > 30) {
+                        historyType = 7;
+                        deduction = 1.0;
+                        status = 'มาสาย > 30 นาที';
+                    } else if (minutesLate > 0) {
+                        historyType = 6;
+                        deduction = 0.5;
+                        status = 'มาสาย < 30 นาที';
+                    }
+
+                    // Deduct score from employee
+                    employee.score -= deduction;
+
                     let record = appData.attendance.find(r => r.employeeId === employee.id && r.date === today);
                     if (!record) {
                         record = {
                             employeeId: employee.id,
                             date: today,
                             checkIn: time,
-                            status: 'มาทำงาน'
+                            status: status
                         };
                         appData.attendance.push(record);
                     } else {
                         record.checkIn = time;
-                        record.status = 'มาทำงาน';
+                        record.status = status;
                     }
+
+                    // Add to calendar history (fallback path without GPS)
+                    const existingHistory = appData.history.find(h => h.empId === employee.id && h.date === today && h.type === historyType);
+                    if (!existingHistory) {
+                        appData.history.push({
+                            empId: employee.id,
+                            date: today,
+                            type: historyType,
+                            timestamp: now.toISOString(),
+                            status: 'Approved',
+                            deduction: deduction,
+                            reason: `บันทึกเวลาผ่าน Face Scan (${status})`
+                        });
+                    }
+
                     await saveData();
-                    showToast(`✅ บันทึกเวลาเข้างานสำเร็จ\n${time}`);
+
+                    if (deduction > 0) {
+                        showToast(`⚠️ ${status}\nหักคะแนน ${deduction} คะแนน\nเวลา: ${time}`);
+                    } else {
+                        showToast(`✅ บันทึกเวลาเข้างานสำเร็จ\n${time}`);
+                    }
                 } else {
                     let record = appData.attendance.find(r => r.employeeId === employee.id && r.date === today);
                     if (record) {
                         record.checkOut = time;
+
+                        // Update history record with check-out time (fallback path)
+                        const historyRecord = appData.history.find(h => h.empId === employee.id && h.date === today && h.type === 11);
+                        if (historyRecord) {
+                            historyRecord.checkOutTime = time;
+                        }
+
                         await saveData();
                         showToast(`✅ บันทึกเวลาออกงานสำเร็จ\n${time}`);
                     }
                 }
 
+                // Refresh all views (fallback path)
                 setTimeout(() => {
                     if (appData.currentRole === 'employee') {
                         renderEmployeeView();
+                    } else if (appData.currentRole === 'admin') {
+                        window.location.reload();
+                    } else if (appData.currentRole === 'manager') {
+                        window.location.reload();
                     }
                 }, 1000);
             }
